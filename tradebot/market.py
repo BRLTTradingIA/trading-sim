@@ -24,6 +24,7 @@ class Market:
         self.feed = "démarrage"
         self.last_tick = 0.0
         self.session = None
+        self.ready = False
 
     # ---------- historique ----------
     async def bootstrap(self):
@@ -33,6 +34,7 @@ class Market:
             last = self.candles[name][config.ENTRY_TF][-1]
             self.prices[name] = last["c"]
             self.day_open[name] = self.candles[name]["1d"][-1]["o"]
+        self.ready = True
         log.info("Historique chargé")
 
     async def _klines(self, pair, tf, limit):

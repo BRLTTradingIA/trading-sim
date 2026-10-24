@@ -124,11 +124,13 @@ class Bot:
 
     async def initial_analysis(self):
         """Au démarrage : photo de chaque actif sans ouvrir de trade (on attend la prochaine clôture)."""
-        while not all(self.market.candles[n][config.ENTRY_TF] for n in config.SYMBOLS):
+        while not self.market.ready:
             await asyncio.sleep(1)
-        for name in config.SYMBOLS:
-            self.snapshots[name] = strategy.analyze(self.market, name)
         self.broker.record_equity(self.market.prices)
+        while True:  # rafraîchit l'affichage (aucune décision de trade ici)
+            for name in config.SYMBOLS:
+                self.snapshots[name] = strategy.analyze(self.market, name)
+            await asyncio.sleep(60)
 
 
 # ---------- serveur web ----------

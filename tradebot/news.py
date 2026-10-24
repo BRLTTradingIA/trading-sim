@@ -103,6 +103,8 @@ class News:
     def classify(item):
         text = item["title"].lower()
         themes = [t for t, rx in THEMES.items() if re.search(rx, text)]
+        if re.search(r"guerre mondiale|world war (i|ii|1|2)\b|anniversaire|commémor", text):
+            themes = [t for t in themes if t != "géopolitique"]  # histoire, pas actualité
         assets = [a for a, rx in ASSET_WORDS.items() if re.search(rx, text)]
         # Géopolitique et banques centrales touchent les trois actifs (l'or en premier lieu).
         if any(t in themes for t in ("géopolitique", "banques centrales", "macro")):
