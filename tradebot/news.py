@@ -20,7 +20,7 @@ FEEDS = {
     "Google News (geopolitics)": G.format(q="geopolitics+OR+war+OR+sanctions+OR+tariffs", hl="en-US", gl="US", lang="en"),
     "Google News (banques centrales)": G.format(q="Federal+Reserve+OR+ECB+OR+inflation+rates", hl="en-US", gl="US", lang="en"),
     "Google News (or)": G.format(q="gold+price", hl="en-US", gl="US", lang="en"),
-    "Google News (crypto)": G.format(q="bitcoin+OR+ethereum", hl="en-US", gl="US", lang="en"),
+    "Google News (crypto)": G.format(q="bitcoin+OR+ethereum+OR+solana+OR+XRP", hl="en-US", gl="US", lang="en"),
     "BBC World": "https://feeds.bbci.co.uk/news/world/rss.xml",
     "Al Jazeera": "https://www.aljazeera.com/xml/rss/all.xml",
     "CoinDesk": "https://www.coindesk.com/arc/outboundfeeds/rss/",
@@ -29,6 +29,13 @@ FEEDS = {
 ASSET_WORDS = {
     "BTC": r"\bbitcoin|\bbtc\b|\bcrypto",
     "ETH": r"\bethereum|\bether\b|\beth\b|\bcrypto",
+    "SOL": r"\bsolana|\bsol\b|\bcrypto",
+    "BNB": r"\bbnb\b|binance|\bcrypto",
+    "XRP": r"\bxrp\b|ripple|\bcrypto",
+    "DOGE": r"dogecoin|\bdoge\b|\bcrypto",
+    "ADA": r"cardano|\bada\b|\bcrypto",
+    "AVAX": r"avalanche|\bavax\b|\bcrypto",
+    "LINK": r"chainlink|\blink\b token|\bcrypto",
     "OR": r"\bgold\b|\bl'or\b|\bprix de l.or|\bbullion|\bprecious metal|\bm[ée]taux pr[ée]cieux",
 }
 THEMES = {

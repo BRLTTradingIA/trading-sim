@@ -76,6 +76,9 @@ class PaperBroker:
         if any(t["asset"] == asset for t in self.open.values()):
             self.log(asset, "ignoré", "un trade est déjà ouvert sur cet actif")
             return
+        if len(self.open) >= config.MAX_OPEN_TRADES:
+            self.log(asset, "ignoré", f"déjà {config.MAX_OPEN_TRADES} trades ouverts (limite d'exposition)")
+            return
         eq = self.equity(prices)
         if self.today_realized() <= -eq * config.DAILY_LOSS_LIMIT_PCT / 100:
             self.log(asset, "ignoré", f"limite de perte journalière ({config.DAILY_LOSS_LIMIT_PCT} %) atteinte")
@@ -86,9 +89,13 @@ class PaperBroker:
             return
         risk_cash = eq * config.RISK_PER_TRADE_PCT / 100
         qty = risk_cash / risk_unit
-        max_qty = eq * config.MAX_LEVERAGE / entry
+        used = sum(t["entry"] * t["qty"] for t in self.open.values())
+        max_qty = max(eq * config.MAX_LEVERAGE - used, 0) / entry
         capped = qty > max_qty
         qty = min(qty, max_qty)
+        if qty * entry < 50:
+            self.log(asset, "ignoré", "capital disponible insuffisant (déjà engagé sur d'autres trades)")
+            return
         fee = entry * qty * config.FEE_PCT / 100
         self.cash -= fee
         tid = uuid.uuid4().hex[:8]

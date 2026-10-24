@@ -35,12 +35,13 @@ h1 span{color:var(--muted);font-weight:400}
 .kpi{padding:12px}
 .kpi .l{color:var(--muted);font-size:12px}
 .kpi .v{font:600 20px var(--mono);margin-top:2px}
-.assets{grid-template-columns:repeat(3,1fr);margin-top:12px}
+.assets{grid-template-columns:repeat(auto-fill,minmax(235px,1fr));margin-top:12px}
+.sect{font:600 13px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:22px 0 0}
 .card{padding:14px}
 .card .top{display:flex;justify-content:space-between;align-items:baseline}
 .card .name{font:600 15px var(--mono)}
 .card .sub{color:var(--muted);font-size:12px}
-.price{font:600 26px var(--mono);margin:6px 0 2px;transition:color .4s}
+.price{font:600 21px var(--mono);margin:6px 0 2px;transition:color .4s}
 .price.flash-up{color:var(--up)}.price.flash-down{color:var(--down)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .chip{font:12px var(--mono);padding:3px 8px;border-radius:6px;background:var(--panel2);color:var(--muted)}
@@ -49,7 +50,7 @@ h1 span{color:var(--muted);font-weight:400}
 .bias.acheteur{background:rgba(47,191,113,.14);color:var(--up)}
 .bias.vendeur{background:rgba(239,84,102,.14);color:var(--down)}
 .bias.neutre{background:var(--panel2);color:var(--muted)}
-.stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:10px;font:12px var(--mono)}
+.stats{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:10px;font:12px var(--mono)}
 .stats span:nth-child(odd){color:var(--muted)}
 .main{grid-template-columns:2fr 1fr;margin-top:12px}
 .panel{padding:14px;min-width:0}
@@ -76,14 +77,14 @@ svg.eq{width:100%;height:160px;display:block}
 #toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9;max-width:min(380px,calc(100vw - 32px))}
 .toast{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
 .toast.alert{border-left-color:var(--down)}
-@media (max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}.assets,.main{grid-template-columns:1fr}}
-@media (max-width:520px){.kpis{grid-template-columns:repeat(2,1fr)}.price{font-size:22px}}
+@media (max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}.main{grid-template-columns:1fr}}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>TRADING SIM <span>/ BTC · ETH · OR</span></h1>
+    <h1>TRADING SIM <span id="assetlist"></span></h1>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <span class="pill sim">SIMULATION · aucun ordre réel</span>
       <span class="pill"><span class="dot" id="dot"></span><span id="feed">connexion…</span></span>
@@ -91,7 +92,6 @@ svg.eq{width:100%;height:160px;display:block}
   </header>
 
   <section class="grid kpis" id="kpis"></section>
-  <section class="grid assets" id="assets"></section>
 
   <section class="grid main">
     <div>
@@ -120,14 +120,17 @@ svg.eq{width:100%;height:160px;display:block}
     </div>
   </section>
 
+  <h2 class="sect">Marchés suivis</h2>
+  <section class="grid assets" id="assets"></section>
+
   <p class="note" id="rules"></p>
 </div>
 <div id="toasts"></div>
 
 <script>
 const $ = id => document.getElementById(id);
-const COLORS = {BTC:"#f2a33a", ETH:"#8c8ff0", OR:"var(--gold)"};
-const LABEL = {BTC:"Bitcoin", ETH:"Ethereum", OR:"Or (PAXG)"};
+const COLORS = {BTC:"#f2a33a", ETH:"#8c8ff0", OR:"var(--gold)", SOL:"#9b6cf2", BNB:"#e9b92f", XRP:"#7f8ea3", DOGE:"#c9a64a", ADA:"#4f7ff0", AVAX:"#e8545a", LINK:"#4b74d8"};
+const LABEL = {BTC:"Bitcoin", ETH:"Ethereum", OR:"Or (PAXG)", SOL:"Solana", BNB:"BNB", XRP:"XRP", DOGE:"Dogecoin", ADA:"Cardano", AVAX:"Avalanche", LINK:"Chainlink"};
 let S = null, lastPrices = {};
 
 const fmt = (v, d=2) => v==null||isNaN(v) ? "—" : Number(v).toLocaleString("fr-FR",{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -144,6 +147,7 @@ async function load(){
 }
 
 function render(){
+  $("assetlist").textContent = "/ " + Object.keys(S.assets).join(" · ");
   const st = S.stats;
   const k = [
     ["Capital simulé", `$${fmt(st.equity)}`],
@@ -161,13 +165,13 @@ function render(){
       <div class="top"><div><div class="name" style="color:${COLORS[n]}">${n}</div><div class="sub">${LABEL[n]}</div></div>
       ${an?`<span class="bias ${an.bias}">${an.bias}</span>`:""}</div>
       <div class="price" id="p-${n}">$${fmtP(a.price)}</div>
-      <div class="sub">24 h (depuis l'ouverture du jour UTC) : ${sgn(a.day_change_pct,2," %")}</div>
+      <div class="sub" title="Variation depuis l'ouverture du jour (UTC)">Aujourd'hui : ${sgn(a.day_change_pct,2," %")}</div>
       ${an?`<div class="chips">
         ${["1d","4h","1h"].map(tf=>`<span class="chip ${trendCls(an.trend[tf])}" title="${esc(an.trend_why[tf])}">${tf} ${an.trend[tf]}</span>`).join("")}
         ${a.news_pause?`<span class="chip warn">pause actu</span>`:""}
       </div>
-      <div class="stats"><span>RSI 1h</span><span>${an.rsi}</span><span>Volatilité (ATR)</span><span>${an.atr_pct} %</span>
-      <span>Volume relatif</span><span>${an.vol_ratio}×</span><span>Plus haut / bas 20h</span><span>${fmtP(a.levels.hh20)} / ${fmtP(a.levels.ll20)}</span></div>`
+      <div class="stats"><span>RSI 1h</span><span>${an.rsi}</span><span title="Volatilité moyenne d'une bougie 1h (ATR)">ATR 1h</span><span>${an.atr_pct} %</span>
+      <span title="Volume de la dernière bougie 1h comparé à la moyenne">Vol. relatif</span><span>${an.vol_ratio}×</span><span>Haut 20h</span><span>${fmtP(a.levels.hh20)}</span><span>Bas 20h</span><span>${fmtP(a.levels.ll20)}</span></div>`
       :`<div class="sub" style="margin-top:10px">Analyse en cours…</div>`}
     </div>`;
   }).join("");
