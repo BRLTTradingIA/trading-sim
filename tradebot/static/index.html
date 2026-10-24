@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading Sim</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0c0f14; --panel:#131821; --panel2:#1a2030; --line:#232b3a; --text:#e6e9ef; --muted:#8a93a6;
+  --up:#2fbf71; --down:#ef5466; --gold:#d9a93f; --accent:#5b8def; --warn:#e3a33b;
+  --mono:"IBM Plex Mono",ui-monospace,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){--bg:#f4f5f8;--panel:#fff;--panel2:#f0f2f6;--line:#e1e4ea;--text:#151a23;--muted:#677087;
+  --up:#14945a;--down:#d23348;--gold:#a87812;--accent:#2f63d1;--warn:#b77510}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 var(--sans)}
+.wrap{max-width:1280px;margin:0 auto;padding:16px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;margin-bottom:16px}
+h1{font:600 18px var(--mono);margin:0;letter-spacing:.02em}
+h1 span{color:var(--muted);font-weight:400}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;
+  font:12px var(--mono);color:var(--muted);background:var(--panel)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.live{background:var(--up);box-shadow:0 0 0 0 var(--up);animation:pulse 2s infinite}
+.dot.slow{background:var(--warn)}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,191,113,.5)}70%{box-shadow:0 0 0 7px rgba(47,191,113,0)}100%{box-shadow:0 0 0 0 rgba(47,191,113,0)}}
+.sim{color:var(--warn);border-color:var(--warn)}
+.grid{display:grid;gap:12px}
+.kpis{grid-template-columns:repeat(6,1fr)}
+.kpi,.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.kpi{padding:12px}
+.kpi .l{color:var(--muted);font-size:12px}
+.kpi .v{font:600 20px var(--mono);margin-top:2px}
+.assets{grid-template-columns:repeat(3,1fr);margin-top:12px}
+.card{padding:14px}
+.card .top{display:flex;justify-content:space-between;align-items:baseline}
+.card .name{font:600 15px var(--mono)}
+.card .sub{color:var(--muted);font-size:12px}
+.price{font:600 26px var(--mono);margin:6px 0 2px;transition:color .4s}
+.price.flash-up{color:var(--up)}.price.flash-down{color:var(--down)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{font:12px var(--mono);padding:3px 8px;border-radius:6px;background:var(--panel2);color:var(--muted)}
+.chip.up{color:var(--up)}.chip.down{color:var(--down)}.chip.warn{color:var(--warn)}
+.bias{font:600 12px var(--mono);padding:3px 8px;border-radius:6px}
+.bias.acheteur{background:rgba(47,191,113,.14);color:var(--up)}
+.bias.vendeur{background:rgba(239,84,102,.14);color:var(--down)}
+.bias.neutre{background:var(--panel2);color:var(--muted)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:10px;font:12px var(--mono)}
+.stats span:nth-child(odd){color:var(--muted)}
+.main{grid-template-columns:2fr 1fr;margin-top:12px}
+.panel{padding:14px;min-width:0}
+.panel h2{font:600 13px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 10px;display:flex;justify-content:space-between;gap:8px}
+.panel h2 small{text-transform:none;letter-spacing:0;font-weight:400}
+table{width:100%;border-collapse:collapse;font:12.5px var(--mono)}
+th{color:var(--muted);font-weight:500;text-align:right;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{text-align:right;padding:7px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+.tbl{overflow-x:auto}
+.pos{color:var(--up)}.neg{color:var(--down)}
+.empty{color:var(--muted);font-size:13px;padding:10px 0}
+.list{max-height:420px;overflow-y:auto}
+.item{padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.item .meta{font:11.5px var(--mono);color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;margin-bottom:2px}
+.item a{color:var(--text);text-decoration:none}.item a:hover{color:var(--accent)}
+.tag{font:11px var(--mono);padding:1px 6px;border-radius:4px;background:var(--panel2);color:var(--muted)}
+.tag.fort{background:rgba(239,84,102,.16);color:var(--down)}
+.tag.moyen{background:rgba(227,163,59,.15);color:var(--warn)}
+.dec-ouvert,.dec-objectif{color:var(--accent)}.dec-clôturé{color:var(--text)}.dec-ignoré{color:var(--warn)}
+svg.eq{width:100%;height:160px;display:block}
+.mt{margin-top:12px}
+.note{color:var(--muted);font-size:12px;margin-top:16px;line-height:1.5}
+#toasts{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;gap:8px;z-index:9;max-width:min(380px,calc(100vw - 32px))}
+.toast{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:8px;padding:10px 12px;font-size:13px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.toast.alert{border-left-color:var(--down)}
+@media (max-width:1000px){.kpis{grid-template-columns:repeat(3,1fr)}.assets,.main{grid-template-columns:1fr}}
+@media (max-width:520px){.kpis{grid-template-columns:repeat(2,1fr)}.price{font-size:22px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>TRADING SIM <span>/ BTC · ETH · OR</span></h1>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <span class="pill sim">SIMULATION · aucun ordre réel</span>
+      <span class="pill"><span class="dot" id="dot"></span><span id="feed">connexion…</span></span>
+    </div>
+  </header>
+
+  <section class="grid kpis" id="kpis"></section>
+  <section class="grid assets" id="assets"></section>
+
+  <section class="grid main">
+    <div>
+      <div class="panel">
+        <h2>Trades ouverts <small id="unreal"></small></h2>
+        <div class="tbl" id="open"></div>
+      </div>
+      <div class="panel mt">
+        <h2>Évolution du capital <small id="eqinfo"></small></h2>
+        <div id="eq"></div>
+      </div>
+      <div class="panel mt">
+        <h2>Trades clôturés</h2>
+        <div class="tbl" id="closed"></div>
+      </div>
+    </div>
+    <div>
+      <div class="panel">
+        <h2>Journal des décisions</h2>
+        <div class="list" id="journal"></div>
+      </div>
+      <div class="panel mt">
+        <h2>Actualités <small id="tension"></small></h2>
+        <div class="list" id="news"></div>
+      </div>
+    </div>
+  </section>
+
+  <p class="note" id="rules"></p>
+</div>
+<div id="toasts"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const COLORS = {BTC:"#f2a33a", ETH:"#8c8ff0", OR:"var(--gold)"};
+const LABEL = {BTC:"Bitcoin", ETH:"Ethereum", OR:"Or (PAXG)"};
+let S = null, lastPrices = {};
+
+const fmt = (v, d=2) => v==null||isNaN(v) ? "—" : Number(v).toLocaleString("fr-FR",{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtP = v => v==null ? "—" : fmt(v, v<10?4:2);
+const sgn = (v, d=2, suf="") => v==null ? "—" : `<span class="${v>=0?'pos':'neg'}">${v>=0?'+':''}${fmt(v,d)}${suf}</span>`;
+const ago = ts => { const s = Date.now()/1000 - ts; if (s<60) return "à l'instant"; if (s<3600) return `il y a ${Math.floor(s/60)} min`; if (s<86400) return `il y a ${Math.floor(s/3600)} h`; return `il y a ${Math.floor(s/86400)} j`; };
+const time = iso => new Date(iso).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const trendCls = t => t==="haussière"?"up":t==="baissière"?"down":"";
+
+async function load(){
+  try { S = await (await fetch("api/state")).json(); render(); }
+  catch(e){ $("feed").textContent = "serveur injoignable"; }
+}
+
+function render(){
+  const st = S.stats;
+  const k = [
+    ["Capital simulé", `$${fmt(st.equity)}`],
+    ["Rendement", sgn(st.return_pct,2," %")],
+    ["Trades clôturés", st.n_closed],
+    ["Taux de réussite", st.win_rate==null?"—":fmt(st.win_rate,0)+" %"],
+    ["Profit factor", st.profit_factor==null?"—":fmt(st.profit_factor)],
+    ["Drawdown max", fmt(st.max_dd,1)+" %"],
+  ];
+  $("kpis").innerHTML = k.map(([l,v])=>`<div class="kpi"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
+
+  $("assets").innerHTML = Object.entries(S.assets).map(([n,a])=>{
+    const an = a.analysis;
+    return `<div class="card">
+      <div class="top"><div><div class="name" style="color:${COLORS[n]}">${n}</div><div class="sub">${LABEL[n]}</div></div>
+      ${an?`<span class="bias ${an.bias}">${an.bias}</span>`:""}</div>
+      <div class="price" id="p-${n}">$${fmtP(a.price)}</div>
+      <div class="sub">24 h (depuis l'ouverture du jour UTC) : ${sgn(a.day_change_pct,2," %")}</div>
+      ${an?`<div class="chips">
+        ${["1d","4h","1h"].map(tf=>`<span class="chip ${trendCls(an.trend[tf])}" title="${esc(an.trend_why[tf])}">${tf} ${an.trend[tf]}</span>`).join("")}
+        ${a.news_pause?`<span class="chip warn">pause actu</span>`:""}
+      </div>
+      <div class="stats"><span>RSI 1h</span><span>${an.rsi}</span><span>Volatilité (ATR)</span><span>${an.atr_pct} %</span>
+      <span>Volume relatif</span><span>${an.vol_ratio}×</span><span>Plus haut / bas 20h</span><span>${fmtP(a.levels.hh20)} / ${fmtP(a.levels.ll20)}</span></div>`
+      :`<div class="sub" style="margin-top:10px">Analyse en cours…</div>`}
+    </div>`;
+  }).join("");
+
+  renderOpen();
+  $("closed").innerHTML = S.closed.length ? `<table><tr><th>Actif</th><th>Sens</th><th>Entrée</th><th>Sortie</th><th>Raison</th><th>Résultat</th><th>R</th><th>Clôture</th></tr>
+    ${S.closed.map(t=>`<tr><td>${t.asset}</td><td>${t.side}</td><td>${fmtP(t.entry)}</td><td>${fmtP(t.exit)}</td><td>${t.exit_reason}</td>
+    <td>${sgn(t.pnl)} $</td><td>${sgn(t.r_multiple)}</td><td>${time(t.closed_at)}</td></tr>`).join("")}</table>`
+    : `<div class="empty">Aucun trade clôturé pour l'instant.</div>`;
+
+  $("journal").innerHTML = S.journal.length ? S.journal.map(j=>`<div class="item"><div class="meta"><span>${time(j.time)}</span><span>${j.asset}</span>
+    <span class="dec-${j.decision.split(' ')[0]}">${j.decision}</span></div>${esc(j.detail)}</div>`).join("")
+    : `<div class="empty">Le robot note ici chaque décision, à chaque clôture de bougie 1h.</div>`;
+
+  $("tension").textContent = `${S.tension_6h} titres géopolitiques / 6 h · ${S.news_status}`;
+  $("news").innerHTML = S.news.length ? S.news.map(n=>`<div class="item"><div class="meta"><span>${ago(n.ts)}</span><span>${esc(n.source)}</span>
+    <span class="tag ${n.impact}">${n.impact}</span>${n.themes.map(t=>`<span class="tag">${t}</span>`).join("")}</div>
+    <a href="${esc(n.link)}" target="_blank" rel="noopener">${esc(n.title)}</a></div>`).join("")
+    : `<div class="empty">Chargement des actualités…</div>`;
+
+  renderEquity();
+  const c = S.settings;
+  $("rules").innerHTML = `Règles : capital de départ ${fmt(c.capital,0)} $, risque ${c.risk_pct} % par trade, frais ${c.fee_pct} % par côté et glissement ${c.slippage_bps/100} % inclus.
+  Entrée seulement dans le sens des tendances 1d et 4h, déclencheur en ${c.entry_tf}. Objectif 1 à ${c.t1_r} R (moitié clôturée, stop au prix d'entrée), objectif 2 à ${c.t2_r} R.
+  Pas de nouveau trade après une actualité à fort impact (${c.news_pause_min} min) ni au-delà de ${c.daily_loss_pct} % de perte dans la journée.
+  Les actualités sont classées par mots-clés : ce n'est pas une lecture du sens. Simulation d'entraînement uniquement, pas un conseil en investissement.`;
+}
+
+function renderOpen(){
+  const rows = S.open;
+  const tot = rows.reduce((s,t)=>s+t.unrealized,0);
+  $("unreal").innerHTML = rows.length ? `latent ${sgn(tot)} $` : "";
+  $("open").innerHTML = rows.length ? `<table><tr><th>Actif</th><th>Sens</th><th>Entrée</th><th>Prix</th><th>Stop</th><th>Obj. 1</th><th>Obj. 2</th><th>Latent</th><th>R</th></tr>
+    ${rows.map(t=>`<tr title="${esc(t.reasons.join(' · '))}"><td>${t.asset}</td><td class="${t.side==='long'?'pos':'neg'}">${t.side}</td><td>${fmtP(t.entry)}</td>
+    <td>${fmtP(t.price)}</td><td>${fmtP(t.stop)}</td><td>${t.t1_hit?'✓':fmtP(t.t1)}</td><td>${fmtP(t.t2)}</td><td>${sgn(t.unrealized)} $</td><td>${sgn(t.r_now)}</td></tr>`).join("")}</table>`
+    : `<div class="empty">Aucun trade ouvert. Le robot attend un signal aligné sur les tendances 1d et 4h.</div>`;
+}
+
+function renderEquity(){
+  const pts = S.equity_curve.slice();
+  pts.push({t:Date.now()/1000, eq:S.stats.equity});
+  if (pts.length < 2){ $("eq").innerHTML = `<div class="empty">La courbe se remplit toutes les 15 minutes.</div>`; return; }
+  const W=800,H=160,P=6, xs=pts.map(p=>p.t), ys=pts.map(p=>p.eq);
+  const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys, S.stats.start)*0.999, y1=Math.max(...ys, S.stats.start)*1.001;
+  const X=t=>P+(t-x0)/(x1-x0||1)*(W-2*P), Y=v=>H-P-(v-y0)/(y1-y0||1)*(H-2*P);
+  const d = pts.map((p,i)=>`${i?'L':'M'}${X(p.t).toFixed(1)},${Y(p.eq).toFixed(1)}`).join("");
+  const col = S.stats.equity >= S.stats.start ? "var(--up)" : "var(--down)";
+  $("eq").innerHTML = `<svg class="eq" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    <line x1="0" x2="${W}" y1="${Y(S.stats.start)}" y2="${Y(S.stats.start)}" stroke="var(--line)" stroke-dasharray="4 4"/>
+    <path d="${d}" fill="none" stroke="${col}" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`;
+  $("eqinfo").textContent = `départ ${fmt(S.stats.start,0)} $ · frais payés ${fmt(S.stats.fees)} $`;
+}
+
+function toast(html, alert=false){
+  const el = document.createElement("div");
+  el.className = "toast" + (alert?" alert":""); el.innerHTML = html;
+  $("toasts").prepend(el); setTimeout(()=>el.remove(), 9000);
+}
+
+function connect(){
+  const es = new EventSource("api/stream");
+  es.onmessage = e => {
+    const m = JSON.parse(e.data);
+    if (m.type === "prices"){
+      const live = m.feed.includes("temps réel");
+      $("dot").className = "dot " + (live ? "live" : "slow");
+      $("feed").textContent = m.feed;
+      if (!S) return;
+      for (const [n,p] of Object.entries(m.prices)){
+        const el = $("p-"+n);
+        if (el && p !== lastPrices[n]){
+          el.textContent = "$"+fmtP(p);
+          el.classList.remove("flash-up","flash-down");
+          if (lastPrices[n]!=null){ el.classList.add(p>lastPrices[n]?"flash-up":"flash-down"); setTimeout(()=>el.classList.remove("flash-up","flash-down"),500); }
+          lastPrices[n] = p; S.assets[n].price = p;
+        }
+      }
+      S.open.forEach(t=>{ const p=m.prices[t.asset]; if(p){ const s=t.side==="long"?1:-1; t.price=p; t.unrealized=s*(p-t.entry)*t.qty; t.r_now=(t.unrealized+t.realized)/t.risk_cash; }});
+      S.stats.equity = m.equity;
+      renderOpen();
+      $("kpis").firstChild.querySelector(".v").textContent = "$"+fmt(m.equity);
+    } else if (m.type === "journal"){
+      if (m.decision !== "pas de trade") toast(`<b>${m.asset}</b> · ${esc(m.decision)}<br>${esc(m.detail)}`);
+      load();
+    } else if (m.type === "news_alert"){
+      toast(`Actualité à fort impact (${m.assets.join(", ")})<br>${esc(m.title)}`, true);
+    } else { load(); }
+  };
+  es.onerror = () => { $("dot").className="dot"; $("feed").textContent="reconnexion…"; };
+}
+
+load(); connect();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
