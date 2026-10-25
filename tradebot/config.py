@@ -27,6 +27,7 @@ DAILY_LOSS_LIMIT_PCT = 3.0                               # plus de nouveaux trad
 FEE_PCT = 0.10                                           # frais par côté (Binance standard)
 SLIPPAGE_BPS = 5                                         # 0,05 % de glissement
 MAX_LEVERAGE = 1.0
+MAX_COST_SHARE = 0.5   # refuse un trade si frais + glissement > 50 % de l'écart entrée-stop
 MAX_OPEN_TRADES = 4    # les cryptos bougent souvent ensemble : on limite l'exposition simultanée
 
 # Gestion de trade

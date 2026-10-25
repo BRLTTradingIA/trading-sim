@@ -87,8 +87,15 @@ class PaperBroker:
         risk_unit = abs(entry - sig["stop"])
         if risk_unit <= 0:
             return
+        # coût aller-retour estimé par unité (frais des deux côtés + glissement de sortie)
+        cost_unit = entry * (2 * config.FEE_PCT / 100 + config.SLIPPAGE_BPS / 10_000)
+        share = cost_unit / risk_unit
+        if share > config.MAX_COST_SHARE:
+            self.log(asset, "ignoré", f"stop trop serré : les frais coûteraient {share * 100:.0f} % de l'écart "
+                                      f"entrée-stop (max {config.MAX_COST_SHARE * 100:.0f} %)")
+            return
         risk_cash = eq * config.RISK_PER_TRADE_PCT / 100
-        qty = risk_cash / risk_unit
+        qty = risk_cash / (risk_unit + cost_unit)   # perte au stop, frais compris = 1 % du capital
         used = sum(t["entry"] * t["qty"] for t in self.open.values())
         max_qty = max(eq * config.MAX_LEVERAGE - used, 0) / entry
         capped = qty > max_qty
@@ -102,7 +109,7 @@ class PaperBroker:
         self.open[tid] = {
             "id": tid, "asset": asset, "side": sig["side"], "entry": entry, "stop": sig["stop"],
             "initial_stop": sig["stop"], "t1": sig["t1"], "t2": sig["t2"], "qty": qty,
-            "initial_qty": qty, "risk_cash": risk_unit * qty, "fees": fee, "realized": -fee,
+            "initial_qty": qty, "risk_cash": (risk_unit + cost_unit) * qty, "fees": fee, "realized": -fee,
             "t1_hit": False, "opened_at": _now(), "reasons": sig["reasons"],
         }
         note = " (taille plafonnée : pas d'effet de levier)" if capped else ""
