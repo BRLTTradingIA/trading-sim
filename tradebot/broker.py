@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 from . import config
 from .fmt import num
 
-STATE_FILE = config.DATA_DIR / "state.json"
 
 
 def _now():
@@ -16,7 +15,9 @@ def _now():
 
 
 class PaperBroker:
-    def __init__(self):
+    def __init__(self, account="A"):
+        self.account = account
+        self.state_file = config.DATA_DIR / config.ACCOUNTS[account]["file"]
         self.cash = config.START_CAPITAL
         self.open = {}          # id -> trade
         self.closed = []
@@ -27,8 +28,8 @@ class PaperBroker:
 
     # ---------- persistance ----------
     def _load(self):
-        if STATE_FILE.exists():
-            s = json.loads(STATE_FILE.read_text())
+        if self.state_file.exists():
+            s = json.loads(self.state_file.read_text())
             self.cash = s["cash"]
             self.open = s["open"]
             self.closed = s["closed"]
@@ -36,12 +37,12 @@ class PaperBroker:
             self.equity_curve = s["equity_curve"]
 
     def save(self):
-        tmp = STATE_FILE.with_suffix(".tmp")
+        tmp = self.state_file.with_suffix(".tmp")
         tmp.write_text(json.dumps({
             "cash": self.cash, "open": self.open, "closed": self.closed[-500:],
             "journal": self.journal[-500:], "equity_curve": self.equity_curve[-3000:],
         }))
-        tmp.replace(STATE_FILE)
+        tmp.replace(self.state_file)
 
     # ---------- calculs ----------
     @staticmethod
@@ -69,7 +70,7 @@ class PaperBroker:
     def log(self, asset, decision, detail):
         entry = {"time": _now(), "asset": asset, "decision": decision, "detail": detail}
         self.journal.append(entry)
-        self.events.append({"type": "journal", **entry})
+        self.events.append({"type": "journal", "account": self.account, **entry})
 
     # ---------- ouverture ----------
     def try_open(self, asset, sig, prices):
@@ -115,7 +116,7 @@ class PaperBroker:
         note = " (taille plafonnée : pas d'effet de levier)" if capped else ""
         self.log(asset, "ouvert", f"{sig['side']} à {num(entry)}, stop {num(sig['stop'])}, "
                                   f"objectifs {num(sig['t1'])} / {num(sig['t2'])}{note}")
-        self.events.append({"type": "trades"})
+        self.events.append({"type": "trades", "account": self.account})
         self.save()
 
     # ---------- suivi à chaque tick ----------
@@ -142,7 +143,7 @@ class PaperBroker:
                 self.log(asset, "objectif 1", f"moitié clôturée à {num(t['t1'])}, stop remonté au prix d'entrée")
                 changed = True
         if changed:
-            self.events.append({"type": "trades"})
+            self.events.append({"type": "trades", "account": self.account})
             self.save()
 
     def _pnl(self, t, exit_price, qty):

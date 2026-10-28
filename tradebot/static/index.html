@@ -29,6 +29,12 @@ h1 span{color:var(--muted);font-weight:400}
 .dot.slow{background:var(--warn)}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,191,113,.5)}70%{box-shadow:0 0 0 7px rgba(47,191,113,0)}100%{box-shadow:0 0 0 0 rgba(47,191,113,0)}}
 .sim{color:var(--warn);border-color:var(--warn)}
+.tabs{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px}
+.tab{all:unset;cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.tab .tl{font:600 13px var(--mono)}.tab .ts{color:var(--muted);font-size:12px;margin-top:2px}
+.tab .te{font:600 16px var(--mono);text-align:right}
+.tab.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .grid{display:grid;gap:12px}
 .kpis{grid-template-columns:repeat(6,1fr)}
 .kpi,.card,.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px}
@@ -90,6 +96,7 @@ svg.eq{width:100%;height:160px;display:block}
       <span class="pill"><span class="dot" id="dot"></span><span id="feed">connexion…</span></span>
     </div>
   </header>
+  <nav class="tabs" id="tabs" aria-label="Comptes simulés"></nav>
 
   <section class="grid kpis" id="kpis"></section>
 
@@ -132,6 +139,11 @@ const $ = id => document.getElementById(id);
 const COLORS = {BTC:"#f2a33a", ETH:"#8c8ff0", OR:"var(--gold)", SOL:"#9b6cf2", BNB:"#e9b92f", XRP:"#7f8ea3", DOGE:"#c9a64a", ADA:"#4f7ff0", AVAX:"#e8545a", LINK:"#4b74d8"};
 const LABEL = {BTC:"Bitcoin", ETH:"Ethereum", OR:"Or (PAXG)", SOL:"Solana", BNB:"BNB", XRP:"XRP", DOGE:"Dogecoin", ADA:"Cardano", AVAX:"Avalanche", LINK:"Chainlink"};
 let S = null, lastPrices = {};
+let ACC = "A";
+try { ACC = (location.hash.slice(1) || localStorage.getItem("acc") || "A").toUpperCase(); } catch(e){}
+let loadTimer = null;
+const loadSoon = () => { clearTimeout(loadTimer); loadTimer = setTimeout(load, 800); };
+function pick(a){ ACC = a; try { localStorage.setItem("acc", a); history.replaceState(null, "", "#"+a); } catch(e){} lastPrices = {}; load(); }
 
 const fmt = (v, d=2) => v==null||isNaN(v) ? "—" : Number(v).toLocaleString("fr-FR",{minimumFractionDigits:d,maximumFractionDigits:d});
 const fmtP = v => v==null ? "—" : fmt(v, v<10?4:2);
@@ -142,11 +154,17 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 const trendCls = t => t==="haussière"?"up":t==="baissière"?"down":"";
 
 async function load(){
-  try { S = await (await fetch("api/state")).json(); render(); }
+  try { S = await (await fetch("api/state?account="+ACC)).json(); ACC = S.account; render(); }
   catch(e){ $("feed").textContent = "serveur injoignable"; }
 }
 
 function render(){
+  $("tabs").innerHTML = Object.entries(S.accounts).map(([k,a])=>{
+    const r = (a.equity/S.stats.start-1)*100;
+    return `<button class="tab ${k===ACC?'on':''}" onclick="pick('${k}')" aria-pressed="${k===ACC}">
+      <div><div class="tl">Compte ${k} · ${esc(a.label)}</div><div class="ts">${a.n_closed} clôturé${a.n_closed>1?'s':''} · ${a.n_open} ouvert${a.n_open>1?'s':''}</div></div>
+      <div class="te" id="te-${k}">$${fmt(a.equity)}<div class="ts">${sgn(r,2," %")}</div></div></button>`;
+  }).join("");
   $("assetlist").textContent = "/ " + Object.keys(S.assets).join(" · ");
   const st = S.stats;
   const k = [
@@ -167,7 +185,7 @@ function render(){
       <div class="price" id="p-${n}">$${fmtP(a.price)}</div>
       <div class="sub" title="Variation depuis l'ouverture du jour (UTC)">Aujourd'hui : ${sgn(a.day_change_pct,2," %")}</div>
       ${an?`<div class="chips">
-        ${["1d","4h","1h"].map(tf=>`<span class="chip ${trendCls(an.trend[tf])}" title="${esc(an.trend_why[tf])}">${tf} ${an.trend[tf]}</span>`).join("")}
+        ${an.tfs.map(tf=>`<span class="chip ${trendCls(an.trend[tf])}" title="${esc(an.trend_why[tf])}">${tf} ${an.trend[tf]}</span>`).join("")}
         ${a.news_pause?`<span class="chip warn">pause actu</span>`:""}
       </div>
       <div class="stats"><span>RSI 1h</span><span>${an.rsi}</span><span title="Volatilité moyenne d'une bougie 1h (ATR)">ATR 1h</span><span>${an.atr_pct} %</span>
@@ -184,7 +202,7 @@ function render(){
 
   $("journal").innerHTML = S.journal.length ? S.journal.map(j=>`<div class="item"><div class="meta"><span>${time(j.time)}</span><span>${j.asset}</span>
     <span class="dec-${j.decision.split(' ')[0]}">${j.decision}</span></div>${esc(j.detail)}</div>`).join("")
-    : `<div class="empty">Le robot note ici chaque décision, à chaque clôture de bougie 1h.</div>`;
+    : `<div class="empty">Le robot note ici chaque décision, à chaque clôture de bougie ${S.settings.entry_tf}.</div>`;
 
   $("tension").textContent = `${S.tension_6h} titres géopolitiques / 6 h · ${S.news_status}`;
   $("news").innerHTML = S.news.length ? S.news.map(n=>`<div class="item"><div class="meta"><span>${ago(n.ts)}</span><span>${esc(n.source)}</span>
@@ -195,7 +213,7 @@ function render(){
   renderEquity();
   const c = S.settings;
   $("rules").innerHTML = `Règles : capital de départ ${fmt(c.capital,0)} $, risque ${c.risk_pct} % par trade, frais ${c.fee_pct} % par côté et glissement ${c.slippage_bps/100} % inclus.
-  Entrée seulement dans le sens des tendances 1d et 4h, déclencheur en ${c.entry_tf}. Objectif 1 à ${c.t1_r} R (moitié clôturée, stop au prix d'entrée), objectif 2 à ${c.t2_r} R.
+  Entrée seulement dans le sens des tendances ${c.trend_tfs.join(' et ')}, déclencheur en ${c.entry_tf}. Trade refusé si les frais dépassent ${c.max_cost_pct} % du risque ; ${c.max_open} trades ouverts au maximum. Objectif 1 à ${c.t1_r} R (moitié clôturée, stop au prix d'entrée), objectif 2 à ${c.t2_r} R.
   Pas de nouveau trade après une actualité à fort impact (${c.news_pause_min} min) ni au-delà de ${c.daily_loss_pct} % de perte dans la journée.
   Les actualités sont classées par mots-clés : ce n'est pas une lecture du sens. Simulation d'entraînement uniquement, pas un conseil en investissement.`;
 }
@@ -207,7 +225,7 @@ function renderOpen(){
   $("open").innerHTML = rows.length ? `<table><tr><th>Actif</th><th>Sens</th><th>Entrée</th><th>Prix</th><th>Stop</th><th>Obj. 1</th><th>Obj. 2</th><th>Latent</th><th>R</th></tr>
     ${rows.map(t=>`<tr title="${esc(t.reasons.join(' · '))}"><td>${t.asset}</td><td class="${t.side==='long'?'pos':'neg'}">${t.side}</td><td>${fmtP(t.entry)}</td>
     <td>${fmtP(t.price)}</td><td>${fmtP(t.stop)}</td><td>${t.t1_hit?'✓':fmtP(t.t1)}</td><td>${fmtP(t.t2)}</td><td>${sgn(t.unrealized)} $</td><td>${sgn(t.r_now)}</td></tr>`).join("")}</table>`
-    : `<div class="empty">Aucun trade ouvert. Le robot attend un signal aligné sur les tendances 1d et 4h.</div>`;
+    : `<div class="empty">Aucun trade ouvert. Le robot attend un signal aligné sur les tendances ${S.settings.trend_tfs.join(' et ')}.</div>`;
 }
 
 function renderEquity(){
@@ -250,15 +268,18 @@ function connect(){
         }
       }
       S.open.forEach(t=>{ const p=m.prices[t.asset]; if(p){ const s=t.side==="long"?1:-1; t.price=p; t.unrealized=s*(p-t.entry)*t.qty; t.r_now=(t.unrealized+t.realized)/t.risk_cash; }});
-      S.stats.equity = m.equity;
+      const eq = m.equity[ACC];
+      S.stats.equity = eq;
       renderOpen();
-      $("kpis").firstChild.querySelector(".v").textContent = "$"+fmt(m.equity);
+      $("kpis").firstChild.querySelector(".v").textContent = "$"+fmt(eq);
+      for (const [k,v] of Object.entries(m.equity)){ const el=$("te-"+k); if (el) el.firstChild.textContent = "$"+fmt(v); }
     } else if (m.type === "journal"){
-      if (m.decision !== "pas de trade") toast(`<b>${m.asset}</b> · ${esc(m.decision)}<br>${esc(m.detail)}`);
-      load();
+      if (m.decision !== "pas de trade" && m.decision !== "ignoré")
+        toast(`<b>Compte ${m.account} · ${m.asset}</b> · ${esc(m.decision)}<br>${esc(m.detail)}`);
+      loadSoon();
     } else if (m.type === "news_alert"){
       toast(`Actualité à fort impact (${m.assets.join(", ")})<br>${esc(m.title)}`, true);
-    } else { load(); }
+    } else { loadSoon(); }
   };
   es.onerror = () => { $("dot").className="dot"; $("feed").textContent="reconnexion…"; };
 }

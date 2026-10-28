@@ -9,6 +9,15 @@ Robot d'entraînement au trading qui tourne 24 h/24 sur un serveur gratuit.
 - Actualités géopolitiques, banques centrales et crypto (flux RSS gratuits), avec pause automatique après une actualité à fort impact.
 - Site en direct : prix, trades ouverts, journal de chaque décision, capital, actualités.
 
+## Deux comptes simulés en parallèle
+
+| Compte | Biais (tendances) | Déclencheur | Fréquence attendue |
+|---|---|---|---|
+| A · Sélectif | 1d + 4h | bougie 1h | ~1 à 2 trades par jour (10 actifs) |
+| B · Day trading | 4h + 1h | bougie 15 min | ~8 trades par jour, un toutes les 2-3 h |
+
+Chaque compte a son propre capital fictif de 10 000 $ (`data/state.json` et `data/state_B.json`). Le site permet de passer de l'un à l'autre.
+
 ## Règles de la stratégie
 
 | Étape | Règle |
@@ -18,7 +27,7 @@ Robot d'entraînement au trading qui tourne 24 h/24 sur un serveur gratuit.
 | Stop | Sous le dernier creux (au-dessus du dernier sommet), entre 1 et 3 ATR |
 | Objectifs | 1,5 R : moitié clôturée et stop remonté au prix d'entrée. 3 R : le reste |
 | Taille | 1 % du capital risqué par trade, pas d'effet de levier |
-| Coûts | 0,1 % de frais par côté + 0,05 % de glissement |
+| Coûts | 0,1 % de frais par côté + 0,05 % de glissement ; trade refusé si les frais dépassent 50 % de l'écart entrée-stop ; la perte au stop vaut 1 % frais compris |
 | Sécurités | Un trade max par actif, pas de nouveau trade 60 min après une actu à fort impact, arrêt au-delà de 3 % de perte dans la journée |
 
 Ces règles n'ont pas d'avantage prouvé. Le but de la simulation est justement de le mesurer sur plusieurs semaines. Ce n'est pas un conseil en investissement.

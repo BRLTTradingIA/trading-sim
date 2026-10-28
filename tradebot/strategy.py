@@ -21,9 +21,10 @@ def _trend(bars, fast=50, slow=200):
     return "latérale", "prix et moyennes non alignés"
 
 
-def analyze(market, name):
-    """Photo de l'actif pour le site (même quand il n'y a pas de signal)."""
-    h1 = market.closed(name, "1h")
+def analyze(market, name, entry="1h", trends=("1d", "4h")):
+    """Photo de l'actif (même sans signal). entry = unité de temps du déclencheur,
+    trends = les deux unités de temps qui donnent le biais."""
+    h1 = market.closed(name, entry)
     if len(h1) < 60:
         return None
     closes = [b["c"] for b in h1]
@@ -33,8 +34,9 @@ def analyze(market, name):
     r = rsi(closes)
     a = atr(highs, lows, closes)
     vavg = sma(vols, 20)[-1] or 1
-    t1d, why1d = _trend(market.closed(name, "1d"))
-    t4h, why4h = _trend(market.closed(name, "4h"))
+    hi_tf, mid_tf = trends
+    t1d, why1d = _trend(market.closed(name, hi_tf))
+    t4h, why4h = _trend(market.closed(name, mid_tf))
     t1h, why1h = _trend(h1, 20, 50)
     if t1d == t4h == "haussière":
         bias = "acheteur"
@@ -43,8 +45,9 @@ def analyze(market, name):
     else:
         bias = "neutre"
     return {
-        "trend": {"1d": t1d, "4h": t4h, "1h": t1h},
-        "trend_why": {"1d": why1d, "4h": why4h, "1h": why1h},
+        "tfs": [hi_tf, mid_tf, entry],
+        "trend": {hi_tf: t1d, mid_tf: t4h, entry: t1h},
+        "trend_why": {hi_tf: why1d, mid_tf: why4h, entry: why1h},
         "bias": bias,
         "rsi": round(r[-1], 1),
         "rsi_prev": round(r[-2], 1),
@@ -66,16 +69,18 @@ def signal(snap):
         return None, "pas assez de données"
     bias = snap["bias"]
     if bias == "neutre":
-        return None, (f"pas de trade : tendances 1d ({snap['trend']['1d']}) et 4h "
-                      f"({snap['trend']['4h']}) pas alignées")
+        ta, tb, _ = snap["tfs"]
+        return None, (f"pas de trade : tendances {ta} ({snap['trend'][ta]}) et {tb} "
+                      f"({snap['trend'][tb]}) pas alignées")
     c, a = snap["close"], snap["atr"]
-    reasons = [f"tendance 1d {snap['trend']['1d']}", f"tendance 4h {snap['trend']['4h']}"]
+    ta, tb, e = snap["tfs"]
+    reasons = [f"tendance {ta} {snap['trend'][ta]}", f"tendance {tb} {snap['trend'][tb]}"]
     if bias == "acheteur":
         pullback = snap["rsi_prev"] < 40 <= snap["rsi"]
         breakout = c > snap["hh20"]
         if not (pullback or breakout):
-            return None, f"biais acheteur, mais pas de déclencheur 1h (RSI {snap['rsi']}, plus haut 20 = {num(snap['hh20'])})"
-        reasons.append("RSI repasse au-dessus de 40 après un repli" if pullback else "cassure du plus haut des 20 dernières bougies 1h")
+            return None, f"biais acheteur, mais pas de déclencheur {e} (RSI {snap['rsi']}, plus haut 20 = {num(snap['hh20'])})"
+        reasons.append("RSI repasse au-dessus de 40 après un repli" if pullback else f"cassure du plus haut des 20 dernières bougies {e}")
         raw_stop = snap["swing_low"] - 0.2 * a
         dist = min(max(c - raw_stop, config.MIN_STOP_ATR * a), config.MAX_STOP_ATR * a)
         side, stop = "long", c - dist
@@ -83,8 +88,8 @@ def signal(snap):
         pullback = snap["rsi_prev"] > 60 >= snap["rsi"]
         breakout = c < snap["ll20"]
         if not (pullback or breakout):
-            return None, f"biais vendeur, mais pas de déclencheur 1h (RSI {snap['rsi']}, plus bas 20 = {num(snap['ll20'])})"
-        reasons.append("RSI repasse sous 60 après un rebond" if pullback else "cassure du plus bas des 20 dernières bougies 1h")
+            return None, f"biais vendeur, mais pas de déclencheur {e} (RSI {snap['rsi']}, plus bas 20 = {num(snap['ll20'])})"
+        reasons.append("RSI repasse sous 60 après un rebond" if pullback else f"cassure du plus bas des 20 dernières bougies {e}")
         raw_stop = snap["swing_high"] + 0.2 * a
         dist = min(max(raw_stop - c, config.MIN_STOP_ATR * a), config.MAX_STOP_ATR * a)
         side, stop = "short", c + dist

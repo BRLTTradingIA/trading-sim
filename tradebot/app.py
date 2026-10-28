@@ -22,33 +22,37 @@ STATIC = Path(__file__).resolve().parent / "static"
 
 class Bot:
     def __init__(self):
-        self.broker = PaperBroker()
+        self.brokers = {aid: PaperBroker(aid) for aid in config.ACCOUNTS}
+        self.broker = self.brokers["A"]   # file d'événements partagée (actualités)
         self.market = Market(self.on_tick, self.on_close)
         self.news = News(lambda: self.http)
         self.http = None
-        self.snapshots = {}
+        self.snapshots = {aid: {} for aid in config.ACCOUNTS}
         self.clients = set()
         self.started = time.time()
 
     # ---------- marché ----------
     async def on_tick(self, name, price, ts):
-        self.broker.on_price(name, price)
+        for b in self.brokers.values():
+            b.on_price(name, price)
 
     async def on_close(self, name, tf):
-        if tf != config.ENTRY_TF:
-            return
-        snap = strategy.analyze(self.market, name)
-        self.snapshots[name] = snap
-        sig, why = strategy.signal(snap)
-        if sig is None:
-            self.broker.log(name, "pas de trade", why)
-            return
-        hot = self.news.recent_high_impact(name, config.NEWS_PAUSE_MIN)
-        if hot:
-            self.broker.log(name, "ignoré", f"signal {sig['side']} mis en pause : actualité à fort impact "
-                                            f"il y a moins de {config.NEWS_PAUSE_MIN} min (« {hot[0]['title'][:90]} »)")
-            return
-        self.broker.try_open(name, sig, self.market.prices)
+        for aid, acc in config.ACCOUNTS.items():
+            if tf != acc["entry"]:
+                continue
+            broker = self.brokers[aid]
+            snap = strategy.analyze(self.market, name, acc["entry"], acc["trends"])
+            self.snapshots[aid][name] = snap
+            sig, why = strategy.signal(snap)
+            if sig is None:
+                broker.log(name, "pas de trade", why)
+                continue
+            hot = self.news.recent_high_impact(name, config.NEWS_PAUSE_MIN)
+            if hot:
+                broker.log(name, "ignoré", f"signal {sig['side']} mis en pause : actualité à fort impact "
+                                           f"il y a moins de {config.NEWS_PAUSE_MIN} min (« {hot[0]['title'][:90]} »)")
+                continue
+            broker.try_open(name, sig, self.market.prices)
 
     async def on_news(self, items):
         strong = [n for n in items if n["impact"] == "fort"]
@@ -57,10 +61,13 @@ class Bot:
         self.broker.events.append({"type": "news"})
 
     # ---------- état pour le site ----------
-    def state(self):
+    def state(self, aid="A"):
+        if aid not in self.brokers:
+            aid = "A"
+        broker, acc = self.brokers[aid], config.ACCOUNTS[aid]
         p = self.market.prices
         open_trades = []
-        for t in self.broker.open.values():
+        for t in broker.open.values():
             price = p.get(t["asset"])
             sign = 1 if t["side"] == "long" else -1
             u = sign * (price - t["entry"]) * t["qty"] if price else 0
@@ -68,7 +75,7 @@ class Bot:
                                 "r_now": (u + t["realized"]) / t["risk_cash"] if t["risk_cash"] else 0})
         assets = {}
         for name in config.SYMBOLS:
-            snap = self.snapshots.get(name)
+            snap = self.snapshots[aid].get(name)
             assets[name] = {
                 "price": p.get(name),
                 "day_change_pct": (p[name] / self.market.day_open[name] - 1) * 100
@@ -83,18 +90,24 @@ class Bot:
             "feed": self.market.feed,
             "last_tick_age_s": time.time() - self.market.last_tick if self.market.last_tick else None,
             "assets": assets,
+            "account": aid,
+            "accounts": {k: {"label": a["label"], "equity": self.brokers[k].equity(p),
+                             "n_closed": len(self.brokers[k].closed), "n_open": len(self.brokers[k].open)}
+                         for k, a in config.ACCOUNTS.items()},
             "open": open_trades,
-            "closed": self.broker.closed[-100:][::-1],
-            "journal": self.broker.journal[-150:][::-1],
-            "stats": self.broker.stats(p),
-            "equity_curve": self.broker.equity_curve[-2000:],
+            "closed": broker.closed[-100:][::-1],
+            "journal": broker.journal[-150:][::-1],
+            "stats": broker.stats(p),
+            "equity_curve": broker.equity_curve[-2000:],
             "news": self.news.items[:80],
             "news_status": self.news.status,
             "tension_6h": self.news.tension(),
             "settings": {
                 "capital": config.START_CAPITAL, "risk_pct": config.RISK_PER_TRADE_PCT,
                 "fee_pct": config.FEE_PCT, "slippage_bps": config.SLIPPAGE_BPS,
-                "t1_r": config.TARGET1_R, "t2_r": config.TARGET2_R, "entry_tf": config.ENTRY_TF,
+                "t1_r": config.TARGET1_R, "t2_r": config.TARGET2_R, "entry_tf": acc["entry"],
+                "trend_tfs": list(acc["trends"]), "max_cost_pct": config.MAX_COST_SHARE * 100,
+                "max_open": config.MAX_OPEN_TRADES,
                 "daily_loss_pct": config.DAILY_LOSS_LIMIT_PCT, "news_pause_min": config.NEWS_PAUSE_MIN,
             },
         }
@@ -103,14 +116,16 @@ class Bot:
     async def broadcaster(self):
         while True:
             await asyncio.sleep(1)
+            events = []
+            for b in self.brokers.values():
+                events += b.events
+                b.events = []
             if not self.clients:
-                self.broker.events.clear()
                 continue
-            msgs = [{"type": "prices", "prices": self.market.prices, "feed": self.market.feed,
-                     "equity": self.broker.equity(self.market.prices),
-                     "unrealized": self.broker.unrealized(self.market.prices)}]
-            msgs += self.broker.events
-            self.broker.events = []
+            p = self.market.prices
+            msgs = [{"type": "prices", "prices": p, "feed": self.market.feed,
+                     "equity": {k: b.equity(p) for k, b in self.brokers.items()}}]
+            msgs += events
             for q in list(self.clients):
                 for m in msgs:
                     if q.qsize() < 200:
@@ -120,16 +135,19 @@ class Bot:
         while True:
             await asyncio.sleep(900)
             if self.market.prices:
-                self.broker.record_equity(self.market.prices)
+                for b in self.brokers.values():
+                    b.record_equity(self.market.prices)
 
     async def initial_analysis(self):
         """Au démarrage : photo de chaque actif sans ouvrir de trade (on attend la prochaine clôture)."""
         while not self.market.ready:
             await asyncio.sleep(1)
-        self.broker.record_equity(self.market.prices)
+        for b in self.brokers.values():
+            b.record_equity(self.market.prices)
         while True:  # rafraîchit l'affichage (aucune décision de trade ici)
-            for name in config.SYMBOLS:
-                self.snapshots[name] = strategy.analyze(self.market, name)
+            for aid, acc in config.ACCOUNTS.items():
+                for name in config.SYMBOLS:
+                    self.snapshots[aid][name] = strategy.analyze(self.market, name, acc["entry"], acc["trends"])
             await asyncio.sleep(60)
 
 
@@ -152,8 +170,8 @@ def make_app(bot):
     async def index(_):
         return web.FileResponse(STATIC / "index.html")
 
-    async def state(_):
-        return web.json_response(bot.state(), dumps=lambda o: json.dumps(o, default=str))
+    async def state(request):
+        return web.json_response(bot.state(request.query.get("account", "A")), dumps=lambda o: json.dumps(o, default=str))
 
     async def stream(request):
         resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache",

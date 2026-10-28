@@ -16,8 +16,14 @@ SYMBOLS = {
     "LINK": "LINKUSDT",
 }
 
-TIMEFRAMES = ["1h", "4h", "1d"]
-ENTRY_TF = "1h"          # unité de temps des signaux d'entrée
+TIMEFRAMES = ["15m", "1h", "4h", "1d"]
+ENTRY_TF = "1h"          # (compte A) unité de temps des signaux d'entrée
+
+# Deux comptes simulés indépendants, même marché, règles différentes
+ACCOUNTS = {
+    "A": {"label": "Sélectif (1h)", "entry": "1h", "trends": ("1d", "4h"), "file": "state.json"},
+    "B": {"label": "Day trading (15 min)", "entry": "15m", "trends": ("4h", "1h"), "file": "state_B.json"},
+}
 HISTORY_BARS = 300
 
 # Compte simulé
