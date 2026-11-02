@@ -40,9 +40,15 @@ class PaperBroker:
         tmp = self.state_file.with_suffix(".tmp")
         tmp.write_text(json.dumps({
             "cash": self.cash, "open": self.open, "closed": self.closed[-500:],
-            "journal": self.journal[-500:], "equity_curve": self.equity_curve[-3000:],
+            "journal": self._trim_journal(), "equity_curve": self.equity_curve[-3000:],
         }))
         tmp.replace(self.state_file)
+
+    def _trim_journal(self):
+        """Garde toutes les décisions importantes et seulement les 200 derniers « pas de trade »."""
+        keep_idle = {id(j) for j in [j for j in self.journal if j["decision"] == "pas de trade"][-200:]}
+        self.journal = [j for j in self.journal if j["decision"] != "pas de trade" or id(j) in keep_idle][-600:]
+        return self.journal
 
     # ---------- calculs ----------
     @staticmethod
@@ -76,6 +82,10 @@ class PaperBroker:
     def try_open(self, asset, sig, prices):
         if any(t["asset"] == asset for t in self.open.values()):
             self.log(asset, "ignoré", "un trade est déjà ouvert sur cet actif")
+            return
+        if sum(1 for t in self.open.values() if t["side"] == sig["side"]) >= config.MAX_SAME_SIDE:
+            self.log(asset, "ignoré", f"déjà {config.MAX_SAME_SIDE} trades ouverts dans le même sens "
+                                      "(les cryptos bougent ensemble : risque concentré)")
             return
         if len(self.open) >= config.MAX_OPEN_TRADES:
             self.log(asset, "ignoré", f"déjà {config.MAX_OPEN_TRADES} trades ouverts (limite d'exposition)")
@@ -114,8 +124,9 @@ class PaperBroker:
             "t1_hit": False, "opened_at": _now(), "reasons": sig["reasons"],
         }
         note = " (taille plafonnée : pas d'effet de levier)" if capped else ""
-        self.log(asset, "ouvert", f"{sig['side']} à {num(entry)}, stop {num(sig['stop'])}, "
-                                  f"objectifs {num(sig['t1'])} / {num(sig['t2'])}{note}")
+        tgt = (f"objectifs {num(sig['t1'])} / {num(sig['t2'])}" if sig.get("t2")
+               else "sortie sur cassure inverse (pas d'objectif fixe)")
+        self.log(asset, "ouvert", f"{sig['side']} à {num(entry)}, stop {num(sig['stop'])}, {tgt}{note}")
         self.events.append({"type": "trades", "account": self.account})
         self.save()
 
@@ -127,8 +138,8 @@ class PaperBroker:
                 continue
             long_ = t["side"] == "long"
             hit_stop = price <= t["stop"] if long_ else price >= t["stop"]
-            hit_t1 = not t["t1_hit"] and (price >= t["t1"] if long_ else price <= t["t1"])
-            hit_t2 = price >= t["t2"] if long_ else price <= t["t2"]
+            hit_t1 = t.get("t1") is not None and not t["t1_hit"] and (price >= t["t1"] if long_ else price <= t["t1"])
+            hit_t2 = t.get("t2") is not None and (price >= t["t2"] if long_ else price <= t["t2"])
             if hit_stop:
                 self._close(tid, t["stop"], t["qty"], "stop" if not t["t1_hit"] else "stop au prix d'entrée")
                 changed = True
@@ -146,6 +157,14 @@ class PaperBroker:
             self.events.append({"type": "trades", "account": self.account})
             self.save()
 
+    def close_asset(self, asset, price, reason):
+        """Clôture au prix du marché (sortie décidée par la stratégie, pas par un stop ou un objectif)."""
+        for tid, t in list(self.open.items()):
+            if t["asset"] == asset:
+                self._close(tid, price, t["qty"], reason)
+                self.events.append({"type": "trades", "account": self.account})
+                self.save()
+
     def _pnl(self, t, exit_price, qty):
         sign = 1 if t["side"] == "long" else -1
         fill = self._fill(exit_price, t["side"], False)
@@ -162,6 +181,13 @@ class PaperBroker:
     def _close(self, tid, price, qty, reason):
         t = self.open.pop(tid)
         pnl, fee, fill = self._pnl(t, price, qty)
+        try:
+            hours = (datetime.now(timezone.utc) - datetime.fromisoformat(t["opened_at"])).total_seconds() / 3600
+        except (KeyError, ValueError):
+            hours = 0
+        funding = t["entry"] * t.get("initial_qty", qty) * config.FUNDING_8H_PCT / 100 * hours / 8
+        pnl -= funding
+        fee += funding
         self.cash += pnl
         t["realized"] += pnl
         t["fees"] += fee

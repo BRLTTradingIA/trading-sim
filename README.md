@@ -16,6 +16,11 @@ Robot d'entraînement au trading qui tourne 24 h/24 sur un serveur gratuit.
 | A · Sélectif | 1d + 4h | bougie 1h | ~1 à 2 trades par jour (10 actifs) |
 | B · Day trading | 4h + 1h | bougie 15 min | ~8 trades par jour, un toutes les 2-3 h |
 
+| C · Tendance journalière | EMA50/EMA200 journalières | cassure du canal de 55 jours, sortie sur cassure inverse de 20 jours | ~1 à 3 trades par mois |
+
+Résultats du test sur historique (frais futures inclus, période de validation mars 2024 → novembre 2026) : A et B perdants sur un an
+(−0,24 R et −0,21 R par trade), C positif (+0,41 R par trade, 86 trades) mais très irrégulier : l'essentiel des gains vient des grandes tendances.
+
 Chaque compte a son propre capital fictif de 10 000 $ (`data/state.json` et `data/state_B.json`). Le site permet de passer de l'un à l'autre.
 
 ## Règles de la stratégie

@@ -104,3 +104,33 @@ def signal(snap):
         "t2": c + sign * dist * config.TARGET2_R,
         "reasons": reasons + [f"stop à {dist / a:.1f} ATR", f"volume {snap['vol_ratio']}× la moyenne"],
     }, "signal"
+
+
+def breakout(market, name):
+    """Compte C : cassure de canal journalière. Renvoie (signal, sortie, explication).
+    sortie = "long" / "short" : le trade de ce sens doit être clôturé (cassure inverse)."""
+    d = market.closed(name, "1d")
+    n_in, n_out = config.BREAKOUT_ENTRY_DAYS, config.BREAKOUT_EXIT_DAYS
+    if len(d) < 210:
+        return None, None, "historique journalier insuffisant"
+    closes = [b["c"] for b in d]
+    highs = [b["h"] for b in d]
+    lows = [b["l"] for b in d]
+    c = closes[-1]
+    e50, e200 = ema(closes, 50)[-1], ema(closes, 200)[-1]
+    a = atr(highs, lows, closes)[-1]
+    hh, ll = max(highs[-n_in - 1:-1]), min(lows[-n_in - 1:-1])
+    xh, xl = max(highs[-n_out - 1:-1]), min(lows[-n_out - 1:-1])
+    exit_side = "long" if c < xl else "short" if c > xh else None
+    up = e50 > e200
+    if c > hh and up:
+        side, stop = "long", c - config.BREAKOUT_STOP_ATR * a
+    elif c < ll and not up:
+        side, stop = "short", c + config.BREAKOUT_STOP_ATR * a
+    else:
+        why = (f"pas de cassure : clôture {num(c)}, canal 55 j {num(ll)} – {num(hh)}, "
+               f"tendance de fond {'haussière' if up else 'baissière'} (EMA50 {'>' if up else '<'} EMA200)")
+        return None, exit_side, why
+    return {"side": side, "entry": c, "stop": stop, "t1": None, "t2": None,
+            "reasons": [f"cassure du {'plus haut' if side == 'long' else 'plus bas'} des {n_in} jours",
+                        f"EMA50 {'>' if up else '<'} EMA200", f"stop à {config.BREAKOUT_STOP_ATR:g} ATR"]}, exit_side, "signal"

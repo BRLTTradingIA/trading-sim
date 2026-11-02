@@ -41,6 +41,17 @@ class Bot:
             if tf != acc["entry"]:
                 continue
             broker = self.brokers[aid]
+            if acc.get("kind") == "breakout":
+                sig, exit_side, why = strategy.breakout(self.market, name)
+                open_t = next((t for t in broker.open.values() if t["asset"] == name), None)
+                if open_t and exit_side == open_t["side"]:
+                    broker.close_asset(name, self.market.prices.get(name, open_t["entry"]),
+                                       f"cassure inverse {config.BREAKOUT_EXIT_DAYS} j")
+                if sig is None:
+                    broker.log(name, "pas de trade", why)
+                else:
+                    broker.try_open(name, sig, self.market.prices)
+                continue
             snap = strategy.analyze(self.market, name, acc["entry"], acc["trends"])
             self.snapshots[aid][name] = snap
             sig, why = strategy.signal(snap)
@@ -75,7 +86,7 @@ class Bot:
                                 "r_now": (u + t["realized"]) / t["risk_cash"] if t["risk_cash"] else 0})
         assets = {}
         for name in config.SYMBOLS:
-            snap = self.snapshots[aid].get(name)
+            snap = self.snapshots[aid if "trends" in acc else "A"].get(name)
             assets[name] = {
                 "price": p.get(name),
                 "day_change_pct": (p[name] / self.market.day_open[name] - 1) * 100
@@ -106,7 +117,8 @@ class Bot:
                 "capital": config.START_CAPITAL, "risk_pct": config.RISK_PER_TRADE_PCT,
                 "fee_pct": config.FEE_PCT, "slippage_bps": config.SLIPPAGE_BPS,
                 "t1_r": config.TARGET1_R, "t2_r": config.TARGET2_R, "entry_tf": acc["entry"],
-                "trend_tfs": list(acc["trends"]), "max_cost_pct": config.MAX_COST_SHARE * 100,
+                "trend_tfs": list(acc.get("trends", ("1d",))), "desc": acc.get("desc"),
+                "funding_8h": config.FUNDING_8H_PCT, "max_same": config.MAX_SAME_SIDE, "max_cost_pct": config.MAX_COST_SHARE * 100,
                 "max_open": config.MAX_OPEN_TRADES,
                 "daily_loss_pct": config.DAILY_LOSS_LIMIT_PCT, "news_pause_min": config.NEWS_PAUSE_MIN,
             },
@@ -146,6 +158,8 @@ class Bot:
             b.record_equity(self.market.prices)
         while True:  # rafraîchit l'affichage (aucune décision de trade ici)
             for aid, acc in config.ACCOUNTS.items():
+                if "trends" not in acc:
+                    continue
                 for name in config.SYMBOLS:
                     self.snapshots[aid][name] = strategy.analyze(self.market, name, acc["entry"], acc["trends"])
             await asyncio.sleep(60)

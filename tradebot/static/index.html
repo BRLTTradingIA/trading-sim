@@ -212,6 +212,8 @@ function render(){
 
   renderEquity();
   const c = S.settings;
+  const common = `Capital de départ ${fmt(c.capital,0)} $, risque ${c.risk_pct} % par trade frais compris. Frais ${c.fee_pct} % par côté (contrats perpétuels : les ventes à découvert sont impossibles au comptant), glissement ${c.slippage_bps/100} % et financement ${c.funding_8h} % / 8 h inclus. ${c.max_open} trades ouverts au maximum, dont ${c.max_same} dans le même sens.`;
+  if (c.desc){ $("rules").innerHTML = `Règles du compte ${ACC} : ${esc(c.desc)} ${common} Simulation d'entraînement uniquement, pas un conseil en investissement.`; return; }
   $("rules").innerHTML = `Règles : capital de départ ${fmt(c.capital,0)} $, risque ${c.risk_pct} % par trade, frais ${c.fee_pct} % par côté et glissement ${c.slippage_bps/100} % inclus.
   Entrée seulement dans le sens des tendances ${c.trend_tfs.join(' et ')}, déclencheur en ${c.entry_tf}. Trade refusé si les frais dépassent ${c.max_cost_pct} % du risque ; ${c.max_open} trades ouverts au maximum. Objectif 1 à ${c.t1_r} R (moitié clôturée, stop au prix d'entrée), objectif 2 à ${c.t2_r} R.
   Pas de nouveau trade après une actualité à fort impact (${c.news_pause_min} min) ni au-delà de ${c.daily_loss_pct} % de perte dans la journée.
@@ -225,7 +227,7 @@ function renderOpen(){
   $("open").innerHTML = rows.length ? `<table><tr><th>Actif</th><th>Sens</th><th>Entrée</th><th>Prix</th><th>Stop</th><th>Obj. 1</th><th>Obj. 2</th><th>Latent</th><th>R</th></tr>
     ${rows.map(t=>`<tr title="${esc(t.reasons.join(' · '))}"><td>${t.asset}</td><td class="${t.side==='long'?'pos':'neg'}">${t.side}</td><td>${fmtP(t.entry)}</td>
     <td>${fmtP(t.price)}</td><td>${fmtP(t.stop)}</td><td>${t.t1_hit?'✓':fmtP(t.t1)}</td><td>${fmtP(t.t2)}</td><td>${sgn(t.unrealized)} $</td><td>${sgn(t.r_now)}</td></tr>`).join("")}</table>`
-    : `<div class="empty">Aucun trade ouvert. Le robot attend un signal aligné sur les tendances ${S.settings.trend_tfs.join(' et ')}.</div>`;
+    : `<div class="empty">Aucun trade ouvert. ${S.settings.desc ? 'Le robot attend une cassure du canal de 55 jours, vérifiée chaque jour à 01h00.' : 'Le robot attend un signal aligné sur les tendances ' + S.settings.trend_tfs.join(' et ') + '.'}</div>`;
 }
 
 function renderEquity(){
